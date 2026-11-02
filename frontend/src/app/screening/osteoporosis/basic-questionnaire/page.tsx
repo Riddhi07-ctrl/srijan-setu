@@ -13,6 +13,7 @@ import {
   CheckCircledIcon
 } from "@radix-ui/react-icons";
 import { useScreening } from "@/context/ScreeningContext";
+import { apiFetch } from "@/config/api";
 
 export default function BasicQuestionnaire() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function BasicQuestionnaire() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:8000/api/analyze/osteoporosis_basic_clinical", {
+      const res = await apiFetch("/api/analyze/osteoporosis_basic_clinical", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -55,17 +56,18 @@ export default function BasicQuestionnaire() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to analyze basic clinical data");
       
-      const isOsteo = data.prediction === "Osteoporosis" || data.prediction === "1" || data.prediction === 1;
-      const osteoProb = data.osteoporosis_probability !== undefined 
-        ? data.osteoporosis_probability 
-        : (isOsteo ? data.confidence / 100 : 1 - (data.confidence / 100));
+      const osteoProb = data.probability !== undefined 
+        ? data.probability 
+        : (data.osteoporosis_probability !== undefined ? data.osteoporosis_probability : 0.25);
 
       setClinicalResult({
         status: "success",
         probability: osteoProb,
         threshold: 0.50,
-        result: isOsteo ? "Osteoporosis" : "Normal",
-        model_name: "10-Feature Clinical Ensemble"
+        result: data.prediction || "Normal",
+        model_name: "10-Feature Clinical Ensemble",
+        probabilities: data.probabilities,
+        evidence: data.evidence,
       });
       
       router.push("/screening/osteoporosis/xray");

@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon 
 } from "@radix-ui/react-icons";
 import { useScreening } from "@/context/ScreeningContext";
+import { apiFetch } from "@/config/api";
 
 const STAGES = [
   "Kinematic Landmark Extraction",
@@ -43,7 +44,7 @@ export default function AnalyzePage() {
         }
         
         if (!isMounted) return;
-        const cameraRes = await fetch(`http://localhost:8000/api/analyze/camera/${selectedJoint || "knee"}`, {
+        const cameraRes = await apiFetch(`/api/analyze/camera/${selectedJoint || "knee"}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(selectedJoint === "knee" ? tempCameraAngles : { joint_angles: tempCameraAngles })

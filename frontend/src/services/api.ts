@@ -1,3 +1,5 @@
+import { apiFetch } from "@/config/api";
+
 export interface ScreeningResult {
   riskLevel: 'Low Risk' | 'Moderate Risk' | 'High Risk' | 'Healthy' | 'Elevated OA Risk' | 'Normal' | 'Elevated OA-related movement pattern' | 'Normal pattern';
   riskScore: number; // 0 to 1
@@ -20,7 +22,7 @@ export const api = {
     const formData = new FormData();
     formData.append("video", file);
 
-    const res = await fetch("http://localhost:8000/api/analyze/camera", {
+    const res = await apiFetch("/api/analyze/camera", {
       method: "POST",
       body: formData,
     });
@@ -45,7 +47,7 @@ export const api = {
       formData.append("files", file);
     });
 
-    const res = await fetch("http://localhost:8000/api/analyze/imu", {
+    const res = await apiFetch("/api/analyze/imu", {
       method: "POST",
       body: formData,
     });
@@ -76,7 +78,7 @@ export const api = {
       };
     }
 
-    const res = await fetch(`http://localhost:8000/api/analyze/camera/${joint}`, {
+    const res = await apiFetch(`/api/analyze/camera/${joint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(bodyPayload)
@@ -96,7 +98,7 @@ export const api = {
 
 
   analyzeLiveCamera: async (leftAngles: number[], rightAngles: number[]): Promise<ScreeningResult> => {
-    const res = await fetch("http://localhost:8000/api/analyze/camera/live", {
+    const res = await apiFetch("/api/analyze/camera/live", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

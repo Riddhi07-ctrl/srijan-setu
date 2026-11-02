@@ -14,6 +14,7 @@ import {
 } from "@radix-ui/react-icons";
 import { useScreening } from "@/context/ScreeningContext";
 import { usePatient } from "@/context/PatientContext";
+import { apiFetch } from "@/config/api";
 
 export default function OsteoporosisQuestionnaire() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function OsteoporosisQuestionnaire() {
     setError(null);
     
     try {
-      const res = await fetch("http://localhost:8000/api/analyze/osteoporosis_clinical", {
+      const res = await apiFetch("/api/analyze/osteoporosis_clinical", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -53,10 +54,14 @@ export default function OsteoporosisQuestionnaire() {
       
       setClinicalResult({
         status: "success",
-        probability: data.confidence / 100,
+        probability: data.probability ?? data.confidence / 100,
         threshold: 0.50,
         result: data.prediction,
-        model_name: "Osteoporosis XGBoost",
+        model_name: "Osteoporosis Clinical Pipeline (T-score + Biochem)",
+        probabilities: data.probabilities,
+        evidence: data.evidence,
+        biochemical_summary: data.biochemical_summary,
+        t_score: data.t_score,
       });
 
       router.push(nextRoute);

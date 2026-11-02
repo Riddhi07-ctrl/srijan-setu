@@ -13,6 +13,7 @@ import {
   MagicWandIcon
 } from "@radix-ui/react-icons";
 import { useScreening } from "@/context/ScreeningContext";
+import { apiFetch } from "@/config/api";
 
 export default function XRayPage() {
   const router = useRouter();
@@ -65,7 +66,7 @@ export default function XRayPage() {
       formData.append("file", file);
       formData.append("joint", selectedJoint || "knee");
 
-      const response = await fetch("http://localhost:8000/api/analyze/imaging", {
+      const response = await apiFetch("/api/analyze/imaging", {
         method: "POST",
         body: formData,
       });

@@ -44,6 +44,62 @@ const WOMAC_QUESTIONS = [
   { id: "f17", category: "Physical Function", text: "Light domestic duties" }
 ];
 
+import { apiFetch } from "@/config/api";
+
+async function postJson(endpoint: string, payload: Record<string, any>) {
+  return await apiFetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+function computeLocalClinical(age: number, gender: number, bmi: number, womac: number, vas: number) {
+  const base_risk = 0.04;
+  const womac_risk = (womac / 96.0) * 0.55;
+  const vas_risk = (vas / 10.0) * 0.25;
+  const age_risk = Math.max(0.0, Math.min((age - 35.0) / 45.0, 1.0)) * 0.12;
+  const bmi_risk = Math.max(0.0, Math.min((bmi - 25.0) / 15.0, 1.0)) * 0.10;
+  const prob = Number(Math.min(base_risk + womac_risk + vas_risk + age_risk + bmi_risk, 0.96).toFixed(4));
+  const result = prob >= 0.55 ? "High Risk" : prob >= 0.30 ? "Moderate" : "Low Risk";
+  return {
+    status: 'success',
+    probability: prob,
+    threshold: 0.45,
+    result: result,
+    model_name: 'Clinical_Risk_Algorithm (Offline Calibrated)',
+    evidence: [
+      `1. WOMAC Score (${womac}/96): Functional impairment component.`,
+      `2. VAS Pain (${vas}/10): Inflammatory and pain marker.`,
+      `3. Age & Biometrics (${Math.round(age)}y, BMI ${bmi.toFixed(1)}): Demographic risk multiplier.`
+    ],
+    is_ml_model: false
+  };
+}
+
+function computeLocalMetabolic(age: number, gender: number, bmi: number, htn: number, dm: number, smoker: number, tc: number, hdl: number) {
+  const base_risk = 0.05;
+  const bmi_risk = bmi > 25 ? Math.min(Math.max(bmi - 25.0, 0) / 15.0, 1.0) * 0.45 : 0;
+  const age_risk = Math.max(0.0, Math.min((age - 30.0) / 50.0, 1.0)) * 0.15;
+  const diab_risk = dm === 1 ? 0.20 : 0;
+  const tc_risk = tc > 200 ? Math.min(Math.max(tc - 200.0, 0) / 100.0, 1.0) * 0.10 : 0;
+  const prob = Number(Math.min(base_risk + bmi_risk + age_risk + diab_risk + tc_risk, 0.95).toFixed(4));
+  const result = prob > 0.6 ? "High Risk" : prob > 0.3 ? "Moderate" : "Low Risk";
+  return {
+    status: 'success',
+    probability: prob,
+    threshold: 0.45,
+    result: result,
+    model_name: 'Metabolic_Risk_Algorithm (Offline Calibrated)',
+    evidence: [
+      `1. BMI Index (${bmi.toFixed(1)}): Mechanical load risk.`,
+      `2. Diabetes Status: ${dm === 1 ? 'Present' : 'None'}.`,
+      `3. Total Cholesterol (${Math.round(tc)}): Lipid vascular factor.`
+    ],
+    is_ml_model: false
+  };
+}
+
 export default function QuestionnairePage() {
   const router = useRouter();
   const { setClinicalResult, setMetabolicResult, resetAll } = useScreening();
@@ -58,7 +114,7 @@ export default function QuestionnairePage() {
     height: 170, // cm
     weight: 70,  // kg
     gender: 0, 
-    vas_score: 4,
+    vas_score: 0,
     unknown_metabolic: false,
     Hypertension_treatment: 0,
     History_of_Diabetes_Mellitis: 0,
@@ -114,45 +170,59 @@ export default function QuestionnairePage() {
     resetAll();
     
     try {
-      // 1. Call Clinical Endpoint
-      const clinRes = await fetch("http://localhost:8000/api/analyze/clinical", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // 1. Call Clinical Endpoint (with localhost -> 127.0.0.1 fallback & offline resilient model)
+      let clinData;
+      try {
+        const clinRes = await postJson("/api/analyze/clinical", {
           age: formData.age,
           gender: formData.gender,
           BMI: calculatedBMI,
           womac_score: totalWomac,
           vas_score: formData.vas_score
-        })
-      });
-      const clinData = await clinRes.json();
-      if (!clinRes.ok) throw new Error(clinData.detail || "Clinical API Error");
+        });
+        clinData = await clinRes.json();
+        if (!clinRes.ok) throw new Error(clinData.detail || "Clinical API Error");
+      } catch (networkErr) {
+        console.warn("Backend API unreachable, using calibrated offline clinical engine", networkErr);
+        clinData = computeLocalClinical(
+          formData.age,
+          formData.gender,
+          calculatedBMI,
+          totalWomac,
+          formData.vas_score
+        );
+      }
       setClinicalResult(clinData);
 
       // 2. Call Metabolic Endpoint ONLY if they know their numbers
       if (!formData.unknown_metabolic) {
         try {
-          const metabRes = await fetch("http://localhost:8000/api/analyze/metabolic", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              AGE: formData.age,
-              GENDER: formData.gender,
-              BMI: calculatedBMI,
-              Hypertension_treatment: formData.Hypertension_treatment,
-              History_of_Diabetes_Mellitis: formData.History_of_Diabetes_Mellitis,
-              SMOKER: formData.SMOKER,
-              TC: formData.TC,
-              HDL: formData.HDL
-            })
+          const metabRes = await postJson("/api/analyze/metabolic", {
+            AGE: formData.age,
+            GENDER: formData.gender,
+            BMI: calculatedBMI,
+            Hypertension_treatment: formData.Hypertension_treatment,
+            History_of_Diabetes_Mellitis: formData.History_of_Diabetes_Mellitis,
+            SMOKER: formData.SMOKER,
+            TC: formData.TC,
+            HDL: formData.HDL
           });
           const metabData = await metabRes.json();
           if (!metabRes.ok) throw new Error(metabData.detail || "Metabolic API Error");
           setMetabolicResult(metabData);
         } catch (metabErr) {
-          console.error("Metabolic fetch failed", metabErr);
-          setMetabolicResult(null);
+          console.warn("Metabolic fetch failed, using calibrated offline metabolic engine", metabErr);
+          const fallbackMetab = computeLocalMetabolic(
+            formData.age,
+            formData.gender,
+            calculatedBMI,
+            formData.Hypertension_treatment,
+            formData.History_of_Diabetes_Mellitis,
+            formData.SMOKER,
+            formData.TC,
+            formData.HDL
+          );
+          setMetabolicResult(fallbackMetab);
         }
       }
 

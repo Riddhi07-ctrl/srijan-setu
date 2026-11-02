@@ -17,8 +17,44 @@ import {
   Cross2Icon,
   DrawingPinIcon
 } from "@radix-ui/react-icons";
-import { ThumbsUp, ThumbsDown, Phone } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Phone, FlaskConical, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import Link from "next/link";
+import { apiFetch } from "@/config/api";
+
+// Helper to determine if a lab value is in/out of normal range
+function labStatus(value: number, range: string): "normal" | "low" | "high" {
+  if (range.startsWith("<")) {
+    const max = parseFloat(range.replace("<", ""));
+    return value < max ? "normal" : "high";
+  }
+  if (range.startsWith(">")) {
+    const min = parseFloat(range.replace(">", ""));
+    return value > min ? "normal" : "low";
+  }
+  const parts = range.split("-").map(s => parseFloat(s.trim()));
+  if (parts.length === 2) {
+    if (value < parts[0]) return "low";
+    if (value > parts[1]) return "high";
+    return "normal";
+  }
+  return "normal";
+}
+
+const LAB_LABELS: Record<string, string> = {
+  serum_calcium: "Serum Calcium",
+  phosphorus: "Phosphorus",
+  calcitriol: "Calcitriol (Vit D3)",
+  calcitonin: "Calcitonin",
+  bone_turnover_fnt: "Bone Turnover (FNT)",
+  uric_acid: "Uric Acid",
+  creatinine: "Creatinine",
+  bun: "Blood Urea Nitrogen",
+  alt: "ALT (Liver)",
+  ast: "AST (Liver)",
+  fbg: "Fasting Blood Glucose",
+  ldl_c: "LDL Cholesterol",
+  hdl_c: "HDL Cholesterol",
+};
 
 export default function OsteoporosisResults() {
   const { clinicalResult, imagingResult } = useScreening();
@@ -29,6 +65,7 @@ export default function OsteoporosisResults() {
   const [doctorFeedback, setDoctorFeedback] = useState<"agreed" | "disagreed" | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [showDexaModal, setShowDexaModal] = useState(false);
+  const [showLabPanel, setShowLabPanel] = useState(true);
 
   if (!clinicalResult && !imagingResult) {
     return (
@@ -48,26 +85,42 @@ export default function OsteoporosisResults() {
   const clinicalRisk = clinicalResult ? clinicalResult.probability : 0;
   const imagingRisk = imagingResult ? imagingResult.probability : 0;
 
-  // Weighted multimodal risk score (50% clinical markers + 50% imaging indicators)
+  // Weighted multimodal risk score (radiography is an objective deep structural marker: 60% weight, clinical: 40%)
   const combinedRisk = (clinicalResult && imagingResult)
-    ? (clinicalRisk * 0.45 + imagingRisk * 0.55)
+    ? (clinicalRisk * 0.40 + imagingRisk * 0.60)
     : (clinicalResult ? clinicalRisk : imagingRisk);
-
-  const isHighRisk = combinedRisk >= 0.50;
-  const isDiscordant = clinicalResult && imagingResult && 
-    ((clinicalResult.result === "Osteoporosis" && imagingResult.result === "Normal") ||
-     (clinicalResult.result === "Normal" && imagingResult.result === "Osteoporosis"));
-
-  const actualAge = patient?.age || 62;
-  const boneAge = imagingResult?.bone_health_age || Math.round(actualAge + (imagingRisk > 0.6 ? 12 : imagingRisk > 0.3 ? 4 : -3));
 
   const clinicalLabel = clinicalResult?.result || "N/A";
   const imagingLabel = imagingResult?.result || "N/A";
 
+  const isHighRisk = 
+    imagingLabel.toLowerCase().includes("osteoporosis") || 
+    clinicalLabel.toLowerCase().includes("osteoporosis") || 
+    combinedRisk >= 0.55;
+
+  const isMediumRisk = !isHighRisk && (
+    imagingLabel.toLowerCase().includes("osteopenia") || 
+    clinicalLabel.toLowerCase().includes("osteopenia") || 
+    combinedRisk >= 0.28
+  );
+
+  const isDiscordant = Boolean(clinicalResult && imagingResult && (
+    (clinicalLabel.toLowerCase().includes("normal") && !imagingLabel.toLowerCase().includes("normal")) ||
+    (!clinicalLabel.toLowerCase().includes("normal") && imagingLabel.toLowerCase().includes("normal"))
+  ));
+
+  const actualAge = patient?.age || 62;
+  const boneAge = imagingResult?.bone_health_age || Math.round(actualAge + (imagingRisk > 0.6 ? 12 : imagingRisk > 0.3 ? 4 : -3));
+
+  // Get biochemical data from clinical result
+  const biochem = clinicalResult?.biochemical_summary as Record<string, { value: number; unit: string; range: string }> | undefined;
+  const evidence = clinicalResult?.evidence as string[] | undefined;
+  const tScore = clinicalResult?.t_score as number | undefined;
+
   const handleDoctorFeedback = async (agreed: boolean) => {
     setDoctorFeedback(agreed ? "agreed" : "disagreed");
     try {
-      await fetch("http://localhost:8000/api/feedback/doctor", {
+      await apiFetch("/api/feedback/doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -87,6 +140,13 @@ export default function OsteoporosisResults() {
   };
 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=SWASTIK-REF-${patient?.screeningId || '101'}-RISK-${Math.round(combinedRisk * 100)}`;
+
+  // Risk color helpers
+  const riskColor = isHighRisk ? "text-[#E65100]" : isMediumRisk ? "text-amber-600" : "text-emerald-600";
+  const riskBg = isHighRisk ? "bg-[#FFEFEA]" : isMediumRisk ? "bg-amber-50" : "bg-emerald-50";
+  const riskBorder = isHighRisk ? "border-[#FFD8CC]" : isMediumRisk ? "border-amber-200" : "border-emerald-200";
+  const riskStatusLabel = isHighRisk ? "Elevated Risk (Osteoporosis)" : isMediumRisk ? "Moderate Risk (Osteopenia / Low Bone Mass)" : "Normal Baseline";
+  const riskActionLabel = isHighRisk ? "DEXA Referral Indicated" : isMediumRisk ? "Lifestyle + Calcium/Vit D Therapy • Follow-up DEXA" : "Annual Monitoring";
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#18181B] py-10 px-4 md:px-8 max-w-5xl mx-auto">
@@ -149,20 +209,43 @@ export default function OsteoporosisResults() {
         }
       `}} />
 
-      {/* Multimodal Ensemble Diagnosis Card */}
+      {/* ═══════════════════════════════════════════════ */}
+      {/* PRIMARY DIAGNOSIS CARD */}
+      {/* ═══════════════════════════════════════════════ */}
       <div className={`border-2 p-7 md:p-8 rounded-3xl mb-8 shadow-[0_15px_45px_-10px_rgba(0,0,0,0.04)] transition-all ${
         isHighRisk 
           ? "bg-gradient-to-r from-orange-50/70 via-rose-50/40 to-white border-[#FFD8CC]"
+          : isMediumRisk
+          ? "bg-gradient-to-r from-amber-50/70 to-white border-amber-200"
           : "bg-gradient-to-r from-emerald-50/70 to-white border-emerald-200"
       }`}>
         <div className="flex flex-col lg:flex-row gap-8 items-center justify-between">
           <div className="flex-1 space-y-4">
-            <h2 className={`text-2xl font-extrabold flex items-center gap-2 ${isHighRisk ? "text-[#E65100]" : "text-emerald-700"}`}>
+            <h2 className={`text-2xl font-extrabold flex items-center gap-2 ${riskColor}`}>
               <ActivityLogIcon className="w-6 h-6" /> Multimodal Calibrated Synthesis
             </h2>
             <p className="text-gray-600 text-sm md:text-base leading-relaxed">
               Fusing clinical lifestyle biomarkers (<strong>{clinicalResult?.model_name || "XGBoost Pipeline"}</strong>) with deep radiographic bone attenuation (<strong>{imagingResult?.model_name || "DenseNet-121 Clean"}</strong>).
             </p>
+
+            {/* T-Score Highlight (if available) */}
+            {tScore !== undefined && (
+              <div className="inline-flex items-center gap-4 bg-white border border-[#EBE8E3] px-5 py-3 rounded-2xl shadow-sm">
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-gray-400 uppercase font-semibold">DEXA T-Score (L1-L4)</span>
+                  <span className={`text-lg font-bold ${tScore <= -2.5 ? "text-rose-600" : tScore <= -1.0 ? "text-amber-600" : "text-emerald-600"}`}>
+                    {tScore.toFixed(1)}
+                  </span>
+                </div>
+                <div className="w-px h-8 bg-gray-200"></div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-gray-400 uppercase font-semibold">WHO Classification</span>
+                  <span className={`text-lg font-bold ${tScore <= -2.5 ? "text-rose-600" : tScore <= -1.0 ? "text-amber-600" : "text-emerald-600"}`}>
+                    {tScore <= -2.5 ? "Osteoporosis" : tScore <= -1.0 ? "Osteopenia" : "Normal BMD"}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Bone Health Age Callout */}
             <div className="inline-flex items-center gap-4 bg-white border border-[#EBE8E3] px-5 py-3 rounded-2xl shadow-sm">
@@ -183,7 +266,11 @@ export default function OsteoporosisResults() {
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-2xl text-amber-800 text-xs md:text-sm">
                 <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
                 <span>
-                  <strong>Clinical Note on Modality Variance:</strong> Clinical questionnaire suggests high fracture vulnerability ({clinicalLabel}), while plain X-ray features appear early-stage ({imagingLabel}). Plain radiographs often appear normal until &gt;30% bone mineral depletion occurs. Confirmatory DEXA scan advised.
+                  <strong>Clinical Note on Modality Variance:</strong> {
+                    clinicalLabel.toLowerCase().includes("normal") && !imagingLabel.toLowerCase().includes("normal")
+                      ? `Radiographic bone attenuation reveals significant trabecular demineralization (${imagingLabel}) with +${Math.max(0, boneAge - actualAge)}y structural bone aging, despite a mild questionnaire profile (${clinicalLabel}). Deep AI radiograph analysis identified early/asymptomatic bone density loss.`
+                      : `Clinical questionnaire indicates elevated fragility risks (${clinicalLabel}), while plain X-ray features appear early-stage (${imagingLabel}). Plain radiographs often appear normal until >30% bone mineral depletion occurs. Confirmatory DEXA scan advised.`
+                  }
                 </span>
               </div>
             )}
@@ -192,17 +279,15 @@ export default function OsteoporosisResults() {
           <div className="flex items-center gap-5">
             <div className="bg-white p-6 rounded-3xl border border-[#EBE8E3] min-w-[240px] text-center shadow-md">
               <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Composite Triage Status</p>
-              <p className={`text-2xl font-black ${isHighRisk ? "text-[#E65100]" : "text-emerald-600"}`}>
-                {isHighRisk ? "Elevated Risk" : "Normal Baseline"}
+              <p className={`text-2xl font-black ${riskColor}`}>
+                {riskStatusLabel}
               </p>
-              <div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                isHighRisk ? "bg-[#FFEFEA] text-[#E65100] border border-[#FFD8CC]" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}>
-                {isHighRisk ? "DEXA Referral Indicated" : "Annual Monitoring"}
+              <div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${riskBg} ${riskColor} border ${riskBorder}`}>
+                {riskActionLabel}
               </div>
               <div className="mt-4 pt-3 border-t border-gray-100">
-                <p className="text-gray-400 text-xs">Vulnerability Index</p>
-                <p className="text-2xl font-bold font-mono text-gray-900 mt-0.5">{(combinedRisk * 100).toFixed(1)}%</p>
+                <p className="text-gray-400 text-xs">{isHighRisk ? "Osteoporosis Risk Index" : isMediumRisk ? "Bone Fragility Risk Index" : "Osteoporosis Risk Index"}</p>
+                <p className={`text-2xl font-bold font-mono mt-0.5 ${riskColor}`}>{(combinedRisk * 100).toFixed(1)}%</p>
               </div>
             </div>
 
@@ -215,7 +300,79 @@ export default function OsteoporosisResults() {
         </div>
       </div>
 
-      {/* Grid: Deep Learning XAI Grad-CAM on Left, Breakdown on Right */}
+      {/* ═══════════════════════════════════════════════ */}
+      {/* BIOCHEMICAL LAB PANEL (NEW - addresses "Biochemical numbers omitted" issue) */}
+      {/* ═══════════════════════════════════════════════ */}
+      {biochem && (
+        <div className="bg-white border border-[#EBE8E3] p-6 md:p-8 rounded-3xl shadow-[0_15px_45px_-10px_rgba(0,0,0,0.04)] mb-8">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-[#FF6B4A]" /> Biochemical Lab Panel
+            </h2>
+            <button 
+              onClick={() => setShowLabPanel(!showLabPanel)} 
+              className="text-xs text-gray-500 hover:text-gray-900 font-medium px-3 py-1 rounded-full border border-gray-200 hover:bg-gray-50 transition-all"
+            >
+              {showLabPanel ? "Collapse" : "Expand"}
+            </button>
+          </div>
+
+          {showLabPanel && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Object.entries(biochem).map(([key, info]) => {
+                const status = labStatus(info.value, info.range);
+                const statusColor = status === "normal" ? "text-emerald-600" : status === "high" ? "text-rose-600" : "text-amber-600";
+                const statusBg = status === "normal" ? "bg-emerald-50 border-emerald-200" : status === "high" ? "bg-rose-50 border-rose-200" : "bg-amber-50 border-amber-200";
+                const StatusIcon = status === "normal" ? Minus : status === "high" ? TrendingUp : TrendingDown;
+                const label = LAB_LABELS[key] || key;
+
+                return (
+                  <div key={key} className={`flex items-center justify-between px-4 py-3 rounded-2xl border ${statusBg} transition-all`}>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider truncate">{label}</span>
+                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className={`text-base font-bold ${statusColor}`}>{info.value}</span>
+                        <span className="text-[10px] text-gray-400 font-medium">{info.unit}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <StatusIcon className={`w-4 h-4 ${statusColor}`} />
+                      <span className="text-[10px] text-gray-400 mt-0.5">Ref: {info.range}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Evidence / Clinical Flags */}
+          {evidence && evidence.length > 0 && (
+            <div className="mt-5 pt-5 border-t border-gray-100">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Clinical Evidence Summary</h3>
+              <div className="space-y-2">
+                {evidence.map((e, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                    <CheckCircledIcon className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span>{e}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* If no biochem data, show a note instead of "omitted" */}
+      {!biochem && clinicalResult && (
+        <div className="bg-white border border-[#EBE8E3] p-5 rounded-3xl mb-8 flex items-center gap-3 text-sm text-gray-500">
+          <FlaskConical className="w-5 h-5 text-gray-400" />
+          <span>Biochemical panel not available — this screening used the <strong>Basic Clinical Questionnaire</strong> pathway (no DEXA / lab values required).</span>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════ */}
+      {/* GRID: Grad-CAM + Probabilities */}
+      {/* ═══════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Grad-CAM Heatmap Viewer */}
         <div className="bg-white border border-[#EBE8E3] p-6 rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.04)] flex flex-col justify-between">
@@ -303,7 +460,7 @@ export default function OsteoporosisResults() {
                 })}
               </div>
             ) : (
-              <p className="text-gray-400 text-xs">Probability distribution unavailable.</p>
+              <p className="text-gray-400 text-xs">Probability distribution unavailable — imaging was skipped.</p>
             )}
 
             <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
@@ -312,23 +469,43 @@ export default function OsteoporosisResults() {
             </div>
           </div>
 
-          {/* Clinical Questionnaire Card */}
+          {/* Clinical Pipeline Card */}
           <div className="bg-white border border-[#EBE8E3] p-6 rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.04)]">
             <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <ActivityLogIcon className="w-5 h-5 text-[#FF6B4A]" /> Clinical Lifestyle Pipeline
+              <ActivityLogIcon className="w-5 h-5 text-[#FF6B4A]" /> Clinical Biomarker Pipeline
             </h3>
             {clinicalResult ? (
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-500">Risk Prediction:</span>
-                  <span className={`font-bold ${clinicalLabel === "Osteoporosis" ? "text-rose-600" : "text-emerald-600"}`}>
+                  <span className={`font-bold ${clinicalLabel === "Osteoporosis" ? "text-rose-600" : clinicalLabel === "Osteopenia" ? "text-amber-600" : "text-emerald-600"}`}>
                     {clinicalLabel}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Model Probability:</span>
-                  <span className="font-mono text-gray-900 font-bold">{(clinicalRisk * 100).toFixed(1)}%</span>
+                  <span className="text-gray-500">Osteoporosis Probability:</span>
+                  <span className={`font-mono font-bold ${clinicalRisk >= 0.5 ? "text-rose-600" : clinicalRisk >= 0.3 ? "text-amber-600" : "text-emerald-600"}`}>
+                    {(clinicalRisk * 100).toFixed(1)}%
+                  </span>
                 </div>
+                {clinicalResult.probabilities && (
+                  <div className="mt-2 space-y-1.5">
+                    {Object.entries(clinicalResult.probabilities).map(([label, pct]: [string, any]) => (
+                      <div key={label} className="flex justify-between items-center">
+                        <span className="text-gray-500">{label}:</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${label === "Osteoporosis" ? "bg-rose-400" : label === "Osteopenia" ? "bg-amber-400" : "bg-emerald-400"}`}
+                              style={{ width: `${Math.max(Number(pct), 3)}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-gray-700 font-medium w-12 text-right">{Number(pct).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[11px] text-gray-400 mt-2">Pipeline: {clinicalResult.model_name}</p>
               </div>
             ) : (
