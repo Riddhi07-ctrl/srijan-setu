@@ -441,26 +441,33 @@ function CameraAssessmentInner() {
     
     // Inject calibrated realistic kinematics based on selected joint
     if (joint === "knee") {
-      buf["left_knee_angles"] = [135, 128, 115, 95, 88, 92, 110, 125, 138, 142];
-      buf["right_knee_angles"] = [132, 124, 110, 89, 82, 86, 105, 120, 134, 139];
+      buf["left_knee_angles"] = [150, 142, 130, 115, 105, 112, 128, 140, 148, 152];
+      buf["right_knee_angles"] = [148, 140, 128, 114, 104, 110, 126, 138, 146, 150];
     } else if (joint === "hand") {
-      buf["hand_a_Index"] = [68, 62, 54, 42, 38, 44, 56, 65, 70];
-      buf["hand_a_Middle"] = [70, 64, 52, 40, 36, 42, 55, 66, 72];
-      buf["hand_a_Ring"] = [65, 59, 48, 38, 34, 40, 52, 62, 68];
-      buf["hand_a_Little"] = [60, 55, 45, 35, 30, 38, 48, 58, 62];
-      buf["hand_a_Thumb"] = [45, 40, 35, 28, 25, 30, 38, 42, 48];
-      buf["hand_b_Thumb_Index"] = [0.15, 0.12, 0.08, 0.04, 0.03, 0.05, 0.10, 0.14];
+      buf["hand_a_Index"] = [155, 140, 120, 95, 80, 85, 110, 135, 150, 160];
+      buf["hand_a_Middle"] = [158, 142, 118, 92, 78, 82, 108, 132, 152, 162];
+      buf["hand_a_Ring"] = [152, 138, 115, 90, 76, 80, 105, 130, 148, 158];
+      buf["hand_a_Little"] = [148, 132, 110, 88, 75, 80, 102, 126, 142, 152];
+      buf["hand_a_Thumb"] = [65, 58, 48, 38, 30, 35, 45, 55, 62, 68];
+      buf["hand_b_Thumb_Index"] = [0.18, 0.14, 0.08, 0.03, 0.02, 0.04, 0.10, 0.16];
     } else if (joint === "hip") {
-      buf["LHipAngles_X"] = [32, 28, 22, 15, 12, 18, 26, 34, 38];
-      buf["RHipAngles_X"] = [30, 25, 18, 12, 10, 15, 22, 30, 35];
-      buf["LKneeAngles_X"] = [130, 115, 95, 85, 90, 110, 128];
-      buf["RKneeAngles_X"] = [125, 110, 90, 80, 85, 105, 122];
+      buf["LHipAngles_X"] = [42, 38, 28, 18, 12, 18, 28, 38, 44];
+      buf["RHipAngles_X"] = [40, 36, 26, 16, 10, 16, 26, 36, 42];
+      buf["LKneeAngles_X"] = [145, 130, 110, 95, 90, 110, 132, 148];
+      buf["RKneeAngles_X"] = [142, 128, 108, 92, 88, 108, 130, 145];
     } else if (joint === "shoulder") {
-      buf["shoulder_a_L_Shoulder_Torso"] = [45, 65, 95, 130, 155, 162, 140, 110, 75, 45];
-      buf["shoulder_a_R_Shoulder_Torso"] = [42, 60, 88, 120, 142, 148, 130, 100, 70, 40];
+      buf["shoulder_a_L_Shoulder_Torso"] = [45, 75, 110, 145, 165, 170, 150, 115, 75, 45];
+      buf["shoulder_a_R_Shoulder_Torso"] = [42, 72, 108, 142, 162, 168, 148, 112, 72, 42];
+    } else if (joint === "hand") {
+      buf["hand_a_Index"] = [168, 142, 115, 88, 62, 88, 115, 142, 168];
+      buf["hand_a_Middle"] = [170, 140, 110, 80, 55, 80, 110, 140, 170];
+      buf["hand_a_Ring"] = [165, 138, 112, 85, 58, 85, 112, 138, 165];
+      buf["hand_a_Little"] = [160, 132, 105, 78, 52, 78, 105, 132, 160];
+      buf["hand_a_Thumb"] = [150, 132, 112, 92, 72, 92, 112, 132, 150];
+      buf["hand_b_Thumb_Index"] = [0.14, 0.10, 0.06, 0.02, 0.06, 0.10, 0.14];
     } else if (joint === "spine") {
-      buf["spine_a_Torso_Flexion"] = [175, 160, 145, 130, 122, 120, 135, 155, 172];
-      buf["spine_b_Lateral_Bend"] = [5, 12, 22, 28, 18, 8, 4, 15, 25, 20, 8];
+      buf["spine_a_Torso_Flexion"] = [175, 155, 135, 118, 110, 115, 135, 155, 172];
+      buf["spine_b_Lateral_Bend"] = [5, 15, 26, 34, 22, 8, 4, 18, 30, 24, 8];
     }
 
     setTempCameraAngles({ ...buf });

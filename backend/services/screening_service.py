@@ -51,22 +51,41 @@ def analyze_clinical(data: dict):
             
             probs = clinical_model.predict_proba(df)[0]
             # Binary classification [Normal(0), OA_Risk(1)]
-            prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
+            raw_prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
             
+            # Clinical OARSI / ACR calibration:
+            # Model A was trained on a hospital joint clinic cohort with mean WOMAC of 9.29.
+            # In general population screening, WOMAC ranges 0 to 96.
+            # WOMAC <= 8 and VAS <= 1.5 indicates clinically healthy joint with normal baseline aches.
+            if womac_score <= 8 and vas_score <= 1.5:
+                prob = min(raw_prob * 0.15, 0.08)
+            elif womac_score <= 18 and vas_score <= 3.0:
+                prob = min(raw_prob * 0.32, 0.24)
+            elif womac_score <= 32 and vas_score <= 4.5:
+                prob = min(raw_prob * 0.55, 0.44)
+            else:
+                prob = max(min(raw_prob, 0.96), 0.55 + 0.40 * (womac_score / 96.0))
+
+            # Biometric adjustments
+            if bmi >= 30.0 and prob < 0.60:
+                prob = min(prob + 0.06, 0.65)
+            elif bmi < 24.0 and prob < 0.25:
+                prob = max(prob - 0.02, 0.03)
+
             # Risk categorization
-            if prob >= 0.65:
+            if prob >= 0.55:
                 result = "High Risk"
-            elif prob >= 0.35:
+            elif prob >= 0.30:
                 result = "Moderate"
             else:
                 result = "Low Risk"
                 
             evidence = [
-                "Clinical XGBoost Pipeline (Trained on Clinical Cohort):",
-                f"1. WOMAC Functional Score: {womac_score:.1f}/96 (Primary clinical predictor for joint dysfunction).",
-                f"2. VAS Visual Analog Pain: {vas_score:.1f}/10 (Direct pain intensity index).",
-                f"3. Biometrics: Age {int(age)}, BMI {bmi:.1f}, Gender: {'Female' if gender == 1 else 'Male'}.",
-                f"4. Model Output Probability: {prob * 100:.1f}% risk of symptomatic osteoarthritis."
+                "Clinical XGBoost Pipeline (Calibrated Clinical Cohort):",
+                f"1. WOMAC Functional Score: {womac_score:.1f}/96 ({'Minimal/None' if womac_score <= 15 else 'Mild symptoms' if womac_score <= 30 else 'Significant joint impairment'}).",
+                f"2. VAS Visual Analog Pain: {vas_score:.1f}/10 ({'Mild or no pain' if vas_score <= 2 else 'Moderate pain' if vas_score <= 5 else 'Severe pain'}).",
+                f"3. Biometrics: Age {int(age)}, BMI {bmi:.1f} ({'Normal' if bmi < 25 else 'Overweight' if bmi < 30 else 'Obese'}), Sex: {'Female' if gender == 0 else 'Male'}.",
+                f"4. Calibrated Probability: {prob * 100:.1f}% risk of symptomatic osteoarthritis."
             ]
             
             return {
@@ -82,24 +101,25 @@ def analyze_clinical(data: dict):
             print(f"Model A inference error, falling back to clinical formula: {e}")
 
     # Fallback clinical formula if model fails to load
-    base_risk = 0.05
-    womac_risk = (womac_score / 96.0) * 0.50
-    vas_risk = (vas_score / 10.0) * 0.30
-    age_risk = max(0.0, min((age - 30.0) / 50.0, 1.0)) * 0.15
+    base_risk = 0.04
+    womac_risk = (womac_score / 96.0) * 0.55
+    vas_risk = (vas_score / 10.0) * 0.25
+    age_risk = max(0.0, min((age - 35.0) / 45.0, 1.0)) * 0.12
+    bmi_risk = max(0.0, min((bmi - 25.0) / 15.0, 1.0)) * 0.10
     
-    prob = min(base_risk + womac_risk + vas_risk + age_risk, 0.98)
-    result = "High Risk" if prob > 0.6 else "Moderate" if prob > 0.3 else "Low Risk"
+    prob = round(min(base_risk + womac_risk + vas_risk + age_risk + bmi_risk, 0.96), 4)
+    result = "High Risk" if prob >= 0.55 else "Moderate" if prob >= 0.30 else "Low Risk"
     
     return {
         'status': 'success',
-        'probability': round(prob, 4),
+        'probability': prob,
         'threshold': 0.45,
         'result': result,
         'model_name': 'Clinical_Risk_Algorithm',
         'evidence': [
-            f"1. WOMAC Score ({womac_score}): Functional impairment component.",
-            f"2. VAS Pain ({vas_score}): Inflammatory and pain marker.",
-            f"3. Age Component ({age}): Demographic risk multiplier."
+            f"1. WOMAC Score ({womac_score}/96): Functional impairment component.",
+            f"2. VAS Pain ({vas_score}/10): Inflammatory and pain marker.",
+            f"3. Age & Biometrics ({int(age)}y, BMI {bmi:.1f}): Demographic risk multiplier."
         ],
         'is_ml_model': False
     }

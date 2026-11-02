@@ -9,7 +9,7 @@ export default function Navbar() {
   const navLinks = [
     { label: "Home", href: "/" },
     { label: "Osteoarthritis", href: "/screening/questionnaire" },
-    { label: "Osteoporosis", href: "/screening/osteoporosis/basic-questionnaire" },
+    { label: "Osteoporosis", href: "/screening/osteoporosis" },
     { label: "ASHA Queue", href: "/screening/worker-queue" },
     { label: "DHO Map", href: "/dashboard" },
     { label: "Simulator", href: "/screening/lifestyle-simulator" },

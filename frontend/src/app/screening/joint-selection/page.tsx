@@ -13,13 +13,13 @@ import {
 
 const protocols = [
   { 
-    id: "osteo-radiograph", 
-    label: "Osteoporosis Radiograph & Biomarkers", 
-    category: "Radiographic AI",
-    icon: "🦴", 
+    id: "hand", 
+    label: "Hand Movement & Posture Analysis", 
+    category: "Computer Vision",
+    icon: "🖐️", 
     status: "ready", 
-    desc: "DenseNet-121 trabecular matrix evaluation with CLAHE enhancement & Grad-CAM heatmaps",
-    href: "/screening/osteoporosis/basic-questionnaire",
+    desc: "MediaPipe hand landmark tracking for finger flexion arcs, dexterity, tremor & Heberden/Bouchard joint stiffness",
+    href: "/screening/camera?joint=hand",
     featured: true
   },
   { 
@@ -28,7 +28,7 @@ const protocols = [
     category: "Computer Vision",
     icon: "🦵", 
     status: "ready", 
-    desc: "Real-time kinematic Knee Adduction Moment (KAM) estimation & flexion angle tracking",
+    desc: "Real-time kinematic Knee Adduction Moment (KAM) estimation & bilateral flexion angle tracking",
     href: "/screening/camera?joint=knee"
   },
   { 
@@ -37,17 +37,8 @@ const protocols = [
     category: "Computer Vision",
     icon: "🧍", 
     status: "ready", 
-    desc: "Single-leg stance pelvic drop (Trendelenburg sign) & frontal plane stability",
+    desc: "Single-leg stance pelvic drop (Trendelenburg sign) & frontal plane stability classification",
     href: "/screening/camera?joint=hip"
-  },
-  { 
-    id: "spine", 
-    label: "Spine & Postural Alignment", 
-    category: "Computer Vision",
-    icon: "🧘", 
-    status: "ready", 
-    desc: "Thoracic kyphosis curvature & sagittal balance screening for fragility wedges",
-    href: "/screening/camera?joint=spine"
   },
   { 
     id: "shoulder", 
@@ -55,17 +46,17 @@ const protocols = [
     category: "Kinematics",
     icon: "💪", 
     status: "ready", 
-    desc: "Abduction/external rotation biomechanics and rotator impingement screening",
+    desc: "Bilateral arm abduction/external rotation biomechanics and rotator cuff impingement screening",
     href: "/screening/camera?joint=shoulder"
   },
   { 
-    id: "opportunistic", 
-    label: "Opportunistic Knee X-Ray Screening", 
-    category: "X-Ray Screening",
-    icon: "🩻", 
+    id: "spine", 
+    label: "Spine & Postural Alignment", 
+    category: "Computer Vision",
+    icon: "🧘", 
     status: "ready", 
-    desc: "Upload existing routine knee X-ray to check for bone density loss flags",
-    href: "/screening/xray"
+    desc: "Thoracic kyphosis curvature & sagittal balance screening for fragility wedge deformities",
+    href: "/screening/camera?joint=spine"
   },
 ];
 

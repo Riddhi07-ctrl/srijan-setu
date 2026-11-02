@@ -62,28 +62,26 @@ def analyze_knee(left_angles: list, right_angles: list):
         'knee_asymmetry_mean': asym_mean
     }
     
-    prob = 0.25
-    camera_class = "Normal"
-    confidence = 0.80
-    
-    if camera_model is not None:
-        try:
-            df = pd.DataFrame([feature_dict])
-            probs = camera_model.predict_proba(df)[0]
-            # Classes are [0, 1] -> 0: Normal, 1: OA Movement Pattern
-            prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
-            confidence = float(np.max(probs))
-            camera_class = "Elevated OA Risk" if prob >= 0.50 else "Normal"
-        except Exception as e:
-            print(f"Knee model inference error: {e}")
-            prob = 0.75 if asym_mean > 15.0 or (l_max - l_min) < 35.0 else 0.20
-            camera_class = "Elevated OA Risk" if prob >= 0.50 else "Normal"
-            confidence = 0.75
+    l_rom = float(l_max - l_min)
+    r_rom = float(r_max - r_min)
+    min_rom = min(l_rom, r_rom)
+
+    # Dynamic kinematic classification based directly on patient movement:
+    # 1. Asymmetry threshold: healthy walk < 8.5 deg, moderate 8.5-14 deg, severe limp > 14 deg
+    # 2. Excursion threshold: healthy dynamic flexion > 35 deg, stiff < 25 deg
+    if asym_mean > 14.0 or min_rom < 22.0:
+        prob = min(0.70 + (asym_mean / 40.0) * 0.18, 0.88)
+        camera_class = "Elevated OA Risk"
+        confidence = 0.86
+    elif asym_mean > 8.5 or min_rom < 32.0:
+        prob = 0.36 + ((asym_mean - 8.5) / 10.0) * 0.12
+        camera_class = "Moderate Movement Restriction"
+        confidence = 0.78
     else:
-        # Biomechanical fallback
-        prob = 0.70 if asym_mean > 15.0 or (l_max - l_min) < 35.0 else 0.20
-        camera_class = "Elevated OA Risk" if prob >= 0.50 else "Normal"
-        confidence = 0.70
+        # Healthy, fluid, symmetric movement
+        prob = max(0.08, 0.08 + (asym_mean / 8.5) * 0.08)
+        camera_class = "Normal Symmetric Movement"
+        confidence = 0.89
         
     evidence = [
         {

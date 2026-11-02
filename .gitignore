@@ -34,3 +34,5 @@ frontend/*.tsbuildinfo
 .idea/
 *.swp
 temp_uploads/
+backend/doctor_feedback_log.jsonl
+*.log

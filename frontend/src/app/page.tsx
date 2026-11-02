@@ -55,7 +55,7 @@ export default function LandingPage() {
     if (selectedFlow === "oa") {
       router.push("/screening/questionnaire");
     } else {
-      router.push("/screening/osteoporosis/basic-questionnaire");
+      router.push("/screening/osteoporosis");
     }
   };
 
